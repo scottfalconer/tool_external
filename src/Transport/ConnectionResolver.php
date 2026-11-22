@@ -25,7 +25,7 @@ final class ConnectionResolver {
   /**
    * Returns effective connection settings; secrets never enter export config.
    */
-  public function resolve(string $name): array {
+  public function resolve(string $name, string $tool_id): array {
     $platform = $this->settings->get('tool_external', []);
     if (!is_array($platform) || ($platform['enabled'] ?? FALSE) !== TRUE) {
       throw new ExternalToolException('disabled', 'External tool execution is disabled in this environment.');
@@ -63,6 +63,9 @@ final class ConnectionResolver {
       if (($secret['url'] ?? NULL) !== $url) {
         throw new ExternalToolException('credentials', 'The external tool credential is not enabled for this endpoint.');
       }
+      if (array_key_exists('allowed_tools', $secret) && !$this->allowsTool($secret['allowed_tools'], $tool_id)) {
+        throw new ExternalToolException('credentials', 'The external tool credential is not enabled for this tool.');
+      }
       $secret = $secret['token'] ?? NULL;
     }
     if (!is_string($secret) || $secret === '' || preg_match('/[\r\n]/', $secret)) {
@@ -75,6 +78,21 @@ final class ConnectionResolver {
       'max_request_bytes' => $this->positiveInteger($platform['max_request_bytes'] ?? 65536),
       'max_response_bytes' => $this->positiveInteger($platform['max_response_bytes'] ?? 65536),
     ];
+  }
+
+  /**
+   * Checks the full plugin ID against an operator-supplied list of tools.
+   */
+  private function allowsTool(mixed $allowed, string $tool_id): bool {
+    if (!is_array($allowed) || !array_is_list($allowed) || !in_array($tool_id, $allowed, TRUE)) {
+      return FALSE;
+    }
+    foreach ($allowed as $id) {
+      if (!is_string($id) || !preg_match('/^external:[a-z][a-z0-9_]*$/D', $id)) {
+        return FALSE;
+      }
+    }
+    return TRUE;
   }
 
   /**

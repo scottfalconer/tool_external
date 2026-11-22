@@ -81,11 +81,12 @@ final class ExternalToolExecutionTest extends KernelTestBase {
    */
   public function testTypedResultsAndTrustedCallerContext(): void {
     $this->respondWith($this->validOutputs());
+    $actor = $this->createUser();
     $executor = (string) $this->container->get('current_user')->id();
     $invocation = $this->container->get('tool.runner')->run(
       'external:prepare',
       ['title' => 'Campaign'],
-      ['tool_external_context' => ['actor' => ['id' => '123', 'roles' => ['editor']], 'caller' => 'content.prepare.v1']],
+      ['tool_external_context' => ['actor' => $actor, 'caller' => 'content.prepare.v1']],
     );
     $this->assertTrue($invocation->getResult()->isSuccess(), (string) $invocation->getResult()->getMessage());
     $this->assertSame($this->validOutputs(), $invocation->getResult()->getContextValues());
@@ -93,10 +94,37 @@ final class ExternalToolExecutionTest extends KernelTestBase {
     $this->assertCount(1, $this->requests);
     $wire = json_decode((string) $this->requests[0]->getBody(), TRUE, flags: JSON_THROW_ON_ERROR);
     $this->assertSame(['title' => 'Campaign'], $wire['inputs']);
-    $this->assertSame('123', $wire['context']['actor']['id']);
+    $this->assertSame((string) $actor->id(), $wire['context']['actor']['id']);
+    $this->assertSame($actor->getRoles(), $wire['context']['actor']['roles']);
     $this->assertSame($executor, $wire['context']['executor']['id']);
     $this->assertSame('content.prepare.v1', $wire['context']['caller']);
     $this->assertSame('Bearer test-only', $this->requests[0]->getHeaderLine('Authorization'));
+  }
+
+  /**
+   * Direct invocations use Drupal's current account for actor and executor.
+   */
+  public function testDefaultAccountContext(): void {
+    $this->respondWith($this->validOutputs());
+    $result = $this->container->get('tool.runner')->run('external:prepare', ['title' => 'Campaign'])->getResult();
+    $this->assertTrue($result->isSuccess(), (string) $result->getMessage());
+    $wire = json_decode((string) $this->requests[0]->getBody(), TRUE, flags: JSON_THROW_ON_ERROR);
+    $this->assertSame((string) $this->container->get('current_user')->id(), $wire['context']['actor']['id']);
+    $this->assertSame($wire['context']['executor'], $wire['context']['actor']);
+    $this->assertSame('tool_api', $wire['context']['caller']);
+  }
+
+  /**
+   * Supplying custom provenance requires a Drupal account object.
+   */
+  public function testInvalidContextFailsBeforeHttp(): void {
+    $this->respondWith($this->validOutputs());
+    $runner = $this->container->get('tool.runner');
+    foreach (['invalid', ['caller' => 'custom'], ['actor' => 'invalid']] as $context) {
+      $result = $runner->run('external:prepare', ['title' => 'Campaign'], ['tool_external_context' => $context])->getResult();
+      $this->assertFalse($result->isSuccess());
+    }
+    $this->assertCount(0, $this->requests);
   }
 
   /**

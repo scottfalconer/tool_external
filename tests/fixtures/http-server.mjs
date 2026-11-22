@@ -81,6 +81,16 @@ const server = createServer(async (req, res) => {
     res.writeHead(307, { Location: '/invoke' }).end();
     return;
   }
+  if (req.url === '/continue') {
+    res.writeContinue();
+  }
+  if (req.url === '/early-hints' || req.url === '/early-hints/text') {
+    res.writeEarlyHints({ link: '</fixture.css>; rel=preload; as=style' });
+    if (req.url === '/early-hints/text') {
+      res.writeHead(200, { 'Content-Type': 'text/plain' }).end('ready');
+      return;
+    }
+  }
   const request = new Request(`http://127.0.0.1${req.url}`, {
     method: req.method,
     headers: req.headers,

@@ -68,6 +68,20 @@ final class ExternalHttpTest extends KernelTestBase {
   }
 
   /**
+   * Runs the tool when an informational response precedes the final JSON.
+   */
+  public function testInformationalResponses(): void {
+    $runner = $this->container->get('tool.runner');
+    $inputs = ['title' => 'Spring', 'campaign_code' => 'CAM-123'];
+    foreach (['/continue', '/early-hints'] as $path) {
+      $this->connect($path);
+      $result = $runner->run('external:campaign_prepare', $inputs)->getResult();
+      $this->assertTrue($result->isSuccess(), $path . ': ' . $result->getMessage());
+      $this->assertSame('CAM-123: Spring', $result->getContextValues()['campaign_label']);
+    }
+  }
+
+  /**
    * A restored plugin can execute with the transport supplied by Drupal.
    */
   public function testSerializedPluginExecutes(): void {
@@ -127,6 +141,7 @@ final class ExternalHttpTest extends KernelTestBase {
   public static function failedEndpoints(): array {
     return [
       ['/invalid', 'invalid JSON'],
+      ['/early-hints/text', 'did not return JSON'],
       ['/oversize', 'response exceeds'],
       ['/redirect', 'unsuccessful HTTP status'],
       ['/slow', 'deadline'],

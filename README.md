@@ -10,7 +10,7 @@ This alpha declares Drupal `^11.2` and requires PHP 8.3 or later with cURL. The 
 
 ```sh
 composer config repositories.external-tools artifact /absolute/path/to/package-directory
-composer require 'drupal/tool_external:0.1.0-alpha2' 'drupal/tool:1.0.0-beta12'
+composer require 'drupal/tool_external:0.1.0-alpha3' 'drupal/tool:1.0.0-beta12'
 vendor/bin/drush en tool_external -y
 ```
 
@@ -33,10 +33,11 @@ $settings['tool_external']['allowed_hosts'][] = 'functions.example.com';
 $settings['tool_external']['secrets']['formatter_token'] = [
   'url' => $formatter_url,
   'token' => getenv('FORMATTER_TOKEN'),
+  'allowed_tools' => ['external:normalize_title'],
 ];
 ```
 
-The connection uses a credential reference. Supply its value in runtime settings from the site's environment or secret manager, and bind it to its exact endpoint. On Drupal's Permissions page (`/admin/people/permissions`), grant the invoking role the permission named at registration. The default is `execute external tools`.
+The connection uses a credential reference. Supply its value in runtime settings from the site's environment or secret manager and bind it to its exact endpoint. The optional `allowed_tools` list limits that credential to the named registrations. Omitting the list preserves alpha2 behavior. Configure destinations you operate or trust. The hosting platform owns outbound network restrictions. On Drupal's Permissions page (`/admin/people/permissions`), grant the invoking role the permission named at registration. The default is `execute external tools`.
 
 ## Register the tool
 
@@ -91,6 +92,8 @@ if ($result->isSuccess()) {
 ```
 
 Tool API enforces the configured permission and validates the declared values. Drupal callers that select entity or field data for inputs must check access to that data. The endpoint receives the input values and account context and controls what happens in its own system.
+
+Direct calls use the current Drupal account for both actor and executor. PHP integrations that initiate a call on behalf of another account must pass the initiating Drupal `AccountInterface` object in `tool_external_context.actor`. When switching accounts, capture the account before the switch. Integrations upgrading from alpha2 should replace any raw actor ID/roles array with that account object. Drupal derives the wire fields from the accounts. The v1 endpoint protocol stays compatible.
 
 Calls are synchronous. The default platform deadline cap is three seconds, and the default request and response limits are 65,536 bytes each. The transport rejects redirects, unsuccessful HTTP statuses and malformed results. Use the `tool_external` log channel to correlate the invocation ID, outcome and duration with the endpoint's logs. A timeout can occur after the endpoint has acted, so a caller that retries a mutation needs an application-level idempotency key.
 

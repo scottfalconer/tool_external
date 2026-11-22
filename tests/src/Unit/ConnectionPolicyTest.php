@@ -35,7 +35,7 @@ final class ConnectionPolicyTest extends UnitTestCase {
     ]);
     $resolver = new ConnectionResolver(new StableConfigReader($config), new Settings(['tool_external' => $platform]));
     try {
-      $resolver->resolve('example');
+      $resolver->resolve('example', 'external:normalize_title');
       $this->fail('The platform must deny this connection.');
     }
     catch (ExternalToolException $exception) {
@@ -49,7 +49,7 @@ final class ConnectionPolicyTest extends UnitTestCase {
   public static function blockedConfigurations(): array {
     $url = 'https://functions.example.test/invoke';
     $bound = ['url' => $url, 'token' => 'synthetic-secret'];
-    return [
+    $cases = [
       'disabled environment' => [['enabled' => FALSE], 'https://functions.example.test/invoke', 'disabled'],
       'unapproved host' => [[], 'https://other.example.test/invoke', 'destination'],
       'plaintext public URL' => [[], 'http://functions.example.test/invoke', 'destination'],
@@ -69,6 +69,19 @@ final class ConnectionPolicyTest extends UnitTestCase {
       'submillisecond platform timeout' => [['max_timeout' => 0.0009], $url, 'configuration'],
       'overflowing platform timeout' => [['max_timeout' => PHP_FLOAT_MAX], $url, 'configuration'],
     ];
+    foreach ([
+      'another tool' => ['external:format_summary'],
+      'empty tool list' => [],
+      'null tool list' => NULL,
+      'string tool list' => 'external:normalize_title',
+      'keyed tool list' => ['tool' => 'external:normalize_title'],
+      'invalid name in tool list' => ['external:normalize_title', 'format_summary'],
+      'invalid type in tool list' => ['external:normalize_title', 1],
+    ] as $case => $tools) {
+      $credential = $bound + ['allowed_tools' => $tools];
+      $cases[$case] = [['secrets' => ['example' => $credential]], $url, 'credentials'];
+    }
+    return $cases;
   }
 
   /**
@@ -81,7 +94,9 @@ final class ConnectionPolicyTest extends UnitTestCase {
         'connections' => ['example' => ['url' => $url, 'secret' => 'example']],
       ],
     ]);
-    foreach ([['url' => $url, 'token' => 'bound-token'], 'legacy-token'] as $credential) {
+    $bound = ['url' => $url, 'token' => 'bound-token'];
+    $scoped = $bound + ['allowed_tools' => ['external:format_summary', 'external:normalize_title']];
+    foreach ([$scoped, $bound, 'legacy-token'] as $credential) {
       $settings = new Settings([
         'tool_external' => [
           'enabled' => TRUE,
@@ -91,7 +106,7 @@ final class ConnectionPolicyTest extends UnitTestCase {
       ]);
       $resolver = new ConnectionResolver(new StableConfigReader($config), $settings);
       $expected = is_array($credential) ? 'bound-token' : 'legacy-token';
-      $this->assertSame($expected, $resolver->resolve('example')['secret']);
+      $this->assertSame($expected, $resolver->resolve('example', 'external:normalize_title')['secret']);
     }
   }
 
@@ -119,7 +134,7 @@ final class ConnectionPolicyTest extends UnitTestCase {
     ]));
     $this->expectException(ExternalToolException::class);
     $this->expectExceptionMessage('between 0.001');
-    $resolver->resolve('example');
+    $resolver->resolve('example', 'external:normalize_title');
   }
 
 }

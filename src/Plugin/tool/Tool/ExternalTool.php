@@ -61,7 +61,10 @@ final class ExternalTool extends ToolBase implements DependentPluginInterface {
     }
     try {
       $context = $this->configuration['tool_external_context'] ?? [];
-      $outputs = $this->client->invoke($id, $values, is_array($context) ? $context : []);
+      if (!is_array($context)) {
+        throw new ExternalToolException('context', 'The Drupal invocation context is invalid.');
+      }
+      $outputs = $this->client->invoke($id, $values, $context);
       return ExecutableResult::success(new TranslatableMarkup('External tool completed.'), $outputs);
     }
     catch (ExternalToolException $exception) {

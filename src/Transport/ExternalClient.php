@@ -6,6 +6,7 @@ namespace Drupal\tool_external\Transport;
 
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Component\Uuid\UuidInterface;
+use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\tool_external\Config\StableConfigReader;
 use Drupal\tool_external\Definition\DefinitionFactory;
@@ -37,7 +38,8 @@ final class ExternalClient {
   /**
    * Invokes a locally declared tool and returns its checked output values.
    *
-   * Caller context comes from Drupal-side integration code, never the response.
+   * An optional caller context carries an in-process initiating account and
+   * caller label. Plain invocations use the current account for both roles.
    */
   public function invoke(string $id, array $inputs, array $caller_context = []): array {
     $invocation_id = $this->uuid->generate();
@@ -50,14 +52,15 @@ final class ExternalClient {
       if (($tool['status'] ?? FALSE) !== TRUE) {
         throw new ExternalToolException('disabled', 'This external tool is not enabled.');
       }
-      $connection = $this->connections->resolve((string) ($tool['connection'] ?? ''));
+      $connection = $this->connections->resolve((string) ($tool['connection'] ?? ''), 'external:' . $id);
       $deadline = $started + $connection['timeout'];
       $executor = [
         'id' => (string) $this->currentUser->id(),
         'roles' => array_values($this->currentUser->getRoles()),
       ];
-      $actor = $caller_context['actor'] ?? $executor;
-      if (!is_array($actor) || !is_string($actor['id'] ?? NULL) || !is_array($actor['roles'] ?? NULL) || array_filter($actor['roles'], fn ($role) => !is_string($role))) {
+      $actor = $caller_context === [] ? $this->currentUser : ($caller_context['actor'] ?? NULL);
+      $caller = $caller_context['caller'] ?? 'tool_api';
+      if (!$actor instanceof AccountInterface || !is_string($caller)) {
         throw new ExternalToolException('context', 'The Drupal invocation context is invalid.');
       }
       $request = [
@@ -66,9 +69,9 @@ final class ExternalClient {
         'invocation_id' => $invocation_id,
         'context' => [
           'site_id' => (string) ($this->config->read('system.site')['uuid'] ?? ''),
-          'actor' => ['id' => $actor['id'], 'roles' => array_values($actor['roles'])],
+          'actor' => ['id' => (string) $actor->id(), 'roles' => array_values($actor->getRoles())],
           'executor' => $executor,
-          'caller' => is_string($caller_context['caller'] ?? NULL) ? $caller_context['caller'] : 'tool_api',
+          'caller' => $caller,
         ],
         'inputs' => JsonValues::inputs($inputs, $this->definitions->inputs($tool['inputs'] ?? [])),
       ];
@@ -109,17 +112,11 @@ final class ExternalClient {
         'decode_content' => FALSE,
         'stream' => FALSE,
         'sink' => $sink,
-        'on_headers' => function ($response) use ($connection, $deadline): void {
-          // Some adapters resolve deferred responses after this callback.
-          // The returned response is always checked again below.
-          if ($response instanceof ResponseInterface) {
-            $this->checkResponse($response, $connection['max_response_bytes'], $deadline);
-          }
-        },
       ]);
       $stream = $response->getBody();
       try {
-        // Also check here for clients and test doubles that skip on_headers.
+        // cURL can receive proxy CONNECT or 1xx headers before the endpoint
+        // replies. The bounded sink limits writes throughout the transfer.
         $this->checkResponse($response, $connection['max_response_bytes'], $deadline);
         if ($stream->isSeekable()) {
           $stream->rewind();
@@ -209,7 +206,7 @@ final class ExternalClient {
   }
 
   /**
-   * Rejects unsuitable responses before their bodies are downloaded.
+   * Checks the final HTTP response before decoding the tool result.
    */
   private function checkResponse(ResponseInterface $response, int $maximum_bytes, float $deadline): void {
     if ($this->now() >= $deadline) {
