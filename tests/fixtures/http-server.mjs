@@ -1,6 +1,8 @@
 import { createServer } from 'node:http';
-import declaration from './feed-tool.json' with { type: 'json' };
+import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+
+const declaration = JSON.parse(readFileSync(new URL('./feed-tool.json', import.meta.url), 'utf8'));
 
 // A full checkout can exercise the optional content example's Fetch handler.
 const campaignHandler = process.argv[2]

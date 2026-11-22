@@ -6,6 +6,7 @@ namespace Drupal\Tests\tool_external\Kernel;
 
 use Drupal\Core\Entity\EntityStorageException;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\tool_external\Traits\HttpFixtureTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\tool\FailureCategory;
 use Drupal\tool\Tool\ToolOperation;
@@ -20,6 +21,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 final class UpstreamDeclarationTest extends KernelTestBase {
 
+  use HttpFixtureTrait;
   use UserCreationTrait;
 
   /**
@@ -31,10 +33,7 @@ final class UpstreamDeclarationTest extends KernelTestBase {
    * Registers a provider declaration and invokes it over loopback HTTP.
    */
   public function testWorkerDeclaresAndRendersMediaFeed(): void {
-    $endpoint = getenv('TOOL_EXTERNAL_TEST_URL');
-    if (!$endpoint) {
-      $this->markTestSkipped('Run tests/run-tests.py for the worker fixture.');
-    }
+    $endpoint = $this->httpFixtureUrl();
     $this->installConfig(['system', 'user', 'tool_external']);
     $this->installEntitySchema('user');
     $this->createUser();

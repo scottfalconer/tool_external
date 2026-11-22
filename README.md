@@ -2,13 +2,15 @@
 
 External Tools registers an HTTPS function as a native Drupal Tool API tool. The function author describes its inputs and outputs. The site operator chooses the endpoint, credential and Drupal permission. Drupal discovers the tool from local configuration and contacts the function only when a caller invokes it.
 
+Tool API is the only required contributed module. A Drupal controller, hook or queue worker can call the registered tool directly. The caller decides when to invoke it, which data the current account can access and what to do if it fails. ECA or an MCP bridge can consume the same registration on sites that install them.
+
 ## Install
 
-This alpha requires Drupal `^11.2`, PHP 8.3 or later with cURL, and Drupal Tool API `1.0.0-beta12`. The commands below assume a Composer-managed Drupal project with Drush. Place the release ZIP in a local directory and run these commands from the project root. Composer's artifact repository requires the PHP ZIP extension on the machine running Composer.
+This alpha declares Drupal `^11.2` and requires PHP 8.3 or later with cURL. The tested combination is Drupal 11.4.13 and Tool API `1.0.0-beta12`. The alpha pins that beta because its plugin execution and schema serialization use those upstream interfaces. The commands below assume a Composer-managed Drupal project with Drush. Place the release ZIP in a local directory and run these commands from the project root. Composer's artifact repository requires the PHP ZIP extension on the machine running Composer.
 
 ```sh
 composer config repositories.external-tools artifact /absolute/path/to/package-directory
-composer require 'drupal/tool_external:0.1.0-alpha1' 'drupal/tool:1.0.0-beta12'
+composer require 'drupal/tool_external:0.1.0-alpha2' 'drupal/tool:1.0.0-beta12'
 vendor/bin/drush en tool_external -y
 ```
 
@@ -34,7 +36,7 @@ $settings['tool_external']['secrets']['formatter_token'] = [
 ];
 ```
 
-The connection uses a credential reference. Its token stays in runtime settings. Bind each credential to its exact endpoint. On Drupal's Permissions page (`/admin/people/permissions`), grant the invoking role the permission named at registration. The default is `execute external tools`.
+The connection uses a credential reference. Supply its value in runtime settings from the site's environment or secret manager, and bind it to its exact endpoint. On Drupal's Permissions page (`/admin/people/permissions`), grant the invoking role the permission named at registration. The default is `execute external tools`.
 
 ## Register the tool
 
@@ -59,7 +61,7 @@ The [registration helper](examples/register-declaration.php) accepts a readable 
 vendor/bin/drush php:script "$PWD/web/modules/contrib/tool_external/examples/register-declaration.php" -- "$PWD/normalize-title.json" formatter transform
 ```
 
-The command creates the exportable config entity `tool_external.tool.normalize_title`. Create it once, then use Drupal's configuration workflow to deploy changes. Consumers discover `external:normalize_title` through Tool API. To switch providers, configure another approved endpoint and its bound credential on the same logical connection.
+The command creates the exportable config entity `tool_external.tool.normalize_title`. Create it once, then use Drupal's configuration workflow to deploy changes. PHP installers can call `ExternalTool::fromDeclaration()` directly. Both paths translate the declaration into native Tool API inputs and outputs. Consumers discover `external:normalize_title` through Tool API. To switch providers, configure another approved endpoint and its bound credential on the same logical connection.
 
 ## Implement the endpoint
 
@@ -94,12 +96,13 @@ Calls are synchronous. The default platform deadline cap is three seconds, and t
 
 ## Run the tests
 
-Use a development installation with `web/core` and PHPUnit in `vendor/bin/phpunit` from the matching `drupal/core-dev` package. The runner uses Python 3 and starts a Node.js HTTP fixture on loopback. Node.js 24 supports the fixture's JSON import attributes. The default in-memory SQLite test database requires PHP's PDO SQLite driver. To use a dedicated test database instead, set `SIMPLETEST_DB` to its connection URL.
+Use a development installation with `web/core`, the matching `drupal/core-dev`, and Node.js on the test machine (verified with Node 24). The HTTP tests start their own loopback fixture under PHPUnit. For an in-memory database, enable PHP's PDO SQLite driver. You can also supply a dedicated test database in `SIMPLETEST_DB`.
 
-From the Drupal Composer project root, pass the project directory to the [test runner](tests/run-tests.py).
+From the Drupal Composer project root, run the packaged suite directly.
 
 ```sh
-python3 web/modules/contrib/tool_external/tests/run-tests.py "$PWD"
+SIMPLETEST_DB=sqlite://localhost/:memory: vendor/bin/phpunit -c web/core/phpunit.xml.dist \
+  --fail-on-skipped web/modules/contrib/tool_external/tests/src
 ```
 
 Released under GPL-2.0-or-later. See [LICENSE.txt](LICENSE.txt).

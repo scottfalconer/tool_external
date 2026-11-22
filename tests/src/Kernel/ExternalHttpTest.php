@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\tool_external\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\tool_external\Traits\HttpFixtureTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\tool_external\Entity\ExternalTool;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -19,6 +20,7 @@ use Symfony\Component\Yaml\Yaml;
 #[RunTestsInSeparateProcesses]
 final class ExternalHttpTest extends KernelTestBase {
 
+  use HttpFixtureTrait;
   use UserCreationTrait;
 
   /**
@@ -36,11 +38,7 @@ final class ExternalHttpTest extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
-    $endpoint = getenv('TOOL_EXTERNAL_TEST_URL');
-    if (!$endpoint) {
-      $this->markTestSkipped('Start tests/fixtures/http-server.mjs and set TOOL_EXTERNAL_TEST_URL.');
-    }
-    $this->endpoint = rtrim($endpoint, '/');
+    $this->endpoint = $this->httpFixtureUrl();
     $this->installConfig(['system', 'user', 'tool_external']);
     $this->installEntitySchema('user');
     $this->createUser();
