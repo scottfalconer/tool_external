@@ -1,0 +1,38 @@
+id: campaign_prepare
+label: Prepare campaign content
+status: true
+description: Prepare a campaign label and check the campaign reference.
+connection: campaign_functions
+contract_version: 1
+operation: transform
+permission: execute external tools
+inputs:
+  title:
+    data_type: string
+    label: Title
+    description: The proposed content title.
+  campaign_code:
+    data_type: string
+    label: Campaign code
+    description: The proposed campaign reference.
+outputs:
+  campaign_label:
+    data_type: string
+    label: Campaign label
+    description: The prepared campaign label.
+  violations:
+    data_type: list
+    label: Validation violations
+    description: An empty list means the business rule accepts the content.
+    item_definition:
+      data_type: map
+      properties:
+        message:
+          data_type: string
+        input:
+          data_type: string
+          required: false
+        code:
+          data_type: string
+          required: false
+

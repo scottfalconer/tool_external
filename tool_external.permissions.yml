@@ -1,0 +1,9 @@
+execute external tools:
+  title: Execute external tools
+  description: Invoke the configured external functions through Tool API.
+  restrict access: true
+administer external tools:
+  title: Administer external tools
+  description: Change external tool definitions and their connections.
+  restrict access: true
+

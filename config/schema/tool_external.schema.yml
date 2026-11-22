@@ -1,0 +1,85 @@
+tool_external.settings:
+  type: config_object
+  label: External tool connections
+  mapping:
+    connections:
+      type: sequence
+      label: Connections
+      sequence:
+        type: mapping
+        mapping:
+          url:
+            type: uri
+            label: Endpoint URL
+          secret:
+            type: string
+            label: Platform secret reference
+          timeout:
+            type: float
+            label: Requested timeout in seconds
+
+tool_external.tool.*:
+  type: config_entity
+  label: External tool
+  mapping:
+    id:
+      type: string
+      label: ID
+    label:
+      type: label
+      label: Label
+      translatable: false
+    description:
+      type: text
+      label: Description
+      translatable: false
+    connection:
+      type: string
+      label: Connection
+    contract_version:
+      type: integer
+      label: Contract version
+    operation:
+      type: string
+      label: Operation
+    permission:
+      type: string
+      label: Permission
+    inputs:
+      type: sequence
+      label: Inputs
+      sequence:
+        type: tool_external.data_definition
+    outputs:
+      type: sequence
+      label: Outputs
+      sequence:
+        type: tool_external.data_definition
+
+tool_external.data_definition:
+  type: mapping
+  label: Tool API data definition
+  mapping:
+    data_type:
+      type: string
+    label:
+      type: label
+      translatable: false
+    description:
+      type: text
+      translatable: false
+    required:
+      type: boolean
+    nullable:
+      type: boolean
+    default_value:
+      type: ignore
+    constraints:
+      type: ignore
+    properties:
+      type: sequence
+      sequence:
+        type: tool_external.data_definition
+    item_definition:
+      type: tool_external.data_definition
+

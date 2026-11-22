@@ -1,0 +1,12 @@
+{
+  "name": "drupal/tool_external",
+  "description": "Register typed HTTPS functions as tools in Drupal Tool API.",
+  "type": "drupal-module",
+  "license": "GPL-2.0-or-later",
+  "require": {
+    "php": ">=8.3",
+    "ext-curl": "*",
+    "drupal/core": "^11.2",
+    "drupal/tool": "1.0.0-beta12"
+  }
+}

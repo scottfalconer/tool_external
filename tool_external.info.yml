@@ -1,0 +1,7 @@
+name: External Tools
+type: module
+description: Register external HTTPS functions as native Tool API tools.
+package: Tool API
+core_version_requirement: ^11.2
+dependencies:
+  - tool:tool
