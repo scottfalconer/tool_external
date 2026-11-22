@@ -4,13 +4,15 @@ External Tools registers an HTTPS function as a native Drupal Tool API tool. The
 
 Tool API is the only required contributed module. A Drupal controller, hook or queue worker can call the registered tool directly. The caller decides when to invoke it, which data the current account can access and what to do if it fails. ECA or an MCP bridge can consume the same registration on sites that install them.
 
+To write a function and connect it to a site feature, follow the [developer guide](DEVELOPING.md) and the [working title formatter](examples/normalize-title.mjs).
+
 ## Install
 
 This alpha declares Drupal `^11.2` and requires PHP 8.3 or later with cURL. The tested combination is Drupal 11.4.13 and Tool API `1.0.0-beta12`. The alpha pins that beta because its plugin execution and schema serialization use those upstream interfaces. The commands below assume a Composer-managed Drupal project with Drush. Place the release ZIP in a local directory and run these commands from the project root. Composer's artifact repository requires the PHP ZIP extension on the machine running Composer.
 
 ```sh
 composer config repositories.external-tools artifact /absolute/path/to/package-directory
-composer require 'drupal/tool_external:0.1.0-alpha3' 'drupal/tool:1.0.0-beta12'
+composer require 'drupal/tool_external:0.1.0-alpha4' 'drupal/tool:1.0.0-beta12'
 vendor/bin/drush en tool_external -y
 ```
 
