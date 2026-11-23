@@ -10,9 +10,10 @@ registration.
 
 The [installation walkthrough](README.md) includes a complete `normalize_title`
 declaration and the Drush command to register it. The
-[matching endpoint](examples/normalize-title.mjs) is a complete JavaScript
-Fetch handler. Serve it at your chosen HTTPS URL, set its `FORMATTER_TOKEN`
-secret, and give the site operator the declaration and the endpoint address.
+[matching endpoint](examples/normalize-title.mjs) is a JavaScript Fetch
+handler. Bundle it with its [bearer check](examples/bearer-token.mjs),
+serve it at your chosen HTTPS URL and set its `FORMATTER_TOKEN` secret.
+Give the site operator the declaration and the endpoint address.
 Any language that handles an authenticated JSON POST can implement the same
 contract.
 

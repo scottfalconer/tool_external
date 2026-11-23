@@ -1,0 +1,29 @@
+{
+  "id": "verified_human_publish",
+  "label": "Request publication approval",
+  "description": "Request or check a reviewer's approval for an exact Drupal publication candidate.",
+  "contract_version": 1,
+  "inputs": {
+    "publication": {
+      "data_type": "map",
+      "properties": {
+        "site_id": {"data_type": "string"},
+        "entity_uuid": {"data_type": "string"},
+        "entity_type": {"data_type": "string"},
+        "bundle": {"data_type": "string"},
+        "langcode": {"data_type": "string"},
+        "generation": {"data_type": "string", "description": "Site-owned generation of the candidate."},
+        "operation": {"data_type": "string"},
+        "snapshot_json": {"data_type": "string", "description": "Frozen field values and publication metadata."},
+        "snapshot_hash": {"data_type": "string", "description": "Lowercase SHA-256 hex digest of the exact snapshot_json bytes."}
+      }
+    }
+  },
+  "outputs": {
+    "decision": {"data_type": "string", "description": "pending, approved, or denied"},
+    "approval_id": {"data_type": "string"},
+    "proposal_digest": {"data_type": "string", "description": "Digest of the publication snapshot that the decision covers."},
+    "review_url": {"data_type": "string"},
+    "message": {"data_type": "string"}
+  }
+}

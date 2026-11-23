@@ -11,9 +11,24 @@ invoke it, which data the current account can access and what to do if it
 fails. ECA or an MCP bridge can consume the same registration on sites that
 install them.
 
-To write a function and connect it to a site feature, follow the
-[developer guide](DEVELOPING.md) and the
-[working title formatter](examples/normalize-title.mjs).
+## What can I build?
+
+- **“I want a custom Media RSS feed for my distribution partner.”** Drupal
+  selects the published episodes the caller can share. A JavaScript Worker
+  turns their IDs, titles and video URLs into Media RSS XML and returns the
+  item count. To change the partner's format, edit the Worker.
+  [Feed walkthrough](https://github.com/scottfalconer/tool_external/tree/main/examples/partner-mrss) ·
+  [Worker code](https://github.com/scottfalconer/tool_external/blob/main/examples/partner-mrss/worker.mjs)
+- **“I want a reviewer to approve the exact article I'm about to publish.”**
+  A site-specific publish hook sends the article's field values to a PHP
+  approval service. The reviewer opens a link and approves with a passkey.
+  When the editor retries, the hook checks that the approval matches the
+  article before saving. Changing the title or body requires a fresh review.
+  [Approval walkthrough](https://github.com/scottfalconer/tool_external/tree/main/examples/verified-human-approval) ·
+  [Provider code](https://github.com/scottfalconer/tool_external/blob/main/examples/verified-human-approval/src/Application.php)
+
+For a first call, follow the title formatter walkthrough below. The
+[developer guide](DEVELOPING.md) shows how to connect a tool to a site feature.
 
 ## Install
 

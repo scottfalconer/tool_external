@@ -1,0 +1,27 @@
+{
+  "id": "partner_mrss",
+  "label": "Render a partner media feed",
+  "description": "Render published episodes supplied by the site as Media RSS.",
+  "contract_version": 1,
+  "inputs": {
+    "channel": {"data_type": "string"},
+    "channel_url": {"data_type": "string"},
+    "episodes": {
+      "data_type": "list",
+      "required": false,
+      "default_value": [],
+      "item_definition": {
+        "data_type": "map",
+        "properties": {
+          "id": {"data_type": "string"},
+          "title": {"data_type": "string"},
+          "media_url": {"data_type": "string"}
+        }
+      }
+    }
+  },
+  "outputs": {
+    "xml": {"data_type": "string"},
+    "item_count": {"data_type": "integer"}
+  }
+}
