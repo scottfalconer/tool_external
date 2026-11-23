@@ -21,11 +21,13 @@ services:
   tool_external.connections:
     class: Drupal\tool_external\Transport\ConnectionResolver
     arguments: ['@tool_external.stable_config', '@settings']
+  tool_external.delegated_runner:
+    class: Drupal\tool_external\DelegatedToolRunner
+    arguments: ['@tool.runner', '@current_user']
   tool_external.client:
     class: Drupal\tool_external\Transport\ExternalClient
-    arguments: ['@http_client', '@tool_external.stable_config', '@tool_external.connections', '@tool_external.definition_factory', '@uuid', '@current_user', '@logger.channel.tool_external', '@datetime.time']
+    arguments: ['@http_client', '@tool_external.stable_config', '@tool_external.connections', '@tool_external.definition_factory', '@uuid', '@current_user', '@logger.channel.tool_external', '@datetime.time', '@tool_external.delegated_runner']
   tool_external.definition_serializer:
     class: Drupal\tool_external\Normalizer\ExternalToolDefinitionSerializer
     decorates: tool.definition_serializer
     arguments: ['@tool_external.definition_serializer.inner']
-

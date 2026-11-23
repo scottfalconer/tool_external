@@ -6,7 +6,9 @@ namespace Drupal\Tests\tool_external\Kernel;
 
 use Drupal\Core\Config\ConfigImporterException;
 use Drupal\Core\Plugin\PluginDependencyTrait;
+use Drupal\Core\Session\AccountInterface;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\tool\Tool\ToolManager;
 use Drupal\tool_external\Entity\ExternalTool;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
@@ -49,6 +51,30 @@ final class DefinitionValidationTest extends KernelTestBase {
       'inputs' => ['title' => ['data_type' => 'string']],
       'outputs' => ['label' => ['data_type' => 'string']],
     ];
+  }
+
+  /**
+   * Rejects empty members while preserving Tool API's AND/OR semantics.
+   */
+  public function testPermissionExpressions(): void {
+    $tool = ExternalTool::create($this->values());
+    foreach (['execute external tools,', '+execute external tools', 'one,  ,two', 'one+ +two'] as $permission) {
+      try {
+        $tool->set('permission', $permission)->save();
+        $this->fail('An empty permission was accepted.');
+      }
+      catch (\InvalidArgumentException $e) {
+        $this->assertStringContainsString('must be nonempty', $e->getMessage());
+      }
+    }
+    $account = $this->createStub(AccountInterface::class);
+    $account->method('hasPermission')->willReturnCallback(static fn ($name) => $name === 'execute external tools');
+    $manager = $this->container->get('plugin.manager.tool');
+    foreach ([',' => FALSE, '+' => TRUE] as $separator => $allowed) {
+      $tool->set('permission', "administer external tools $separator execute external tools")->save();
+      $definition = $manager->getDefinition('external:review');
+      $this->assertSame($allowed, ToolManager::checkPermission($definition, $account)->isAllowed());
+    }
   }
 
   /**

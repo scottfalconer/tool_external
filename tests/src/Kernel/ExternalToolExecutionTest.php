@@ -82,11 +82,13 @@ final class ExternalToolExecutionTest extends KernelTestBase {
   public function testTypedResultsAndTrustedCallerContext(): void {
     $this->respondWith($this->validOutputs());
     $actor = $this->createUser();
-    $executor = (string) $this->container->get('current_user')->id();
-    $invocation = $this->container->get('tool.runner')->run(
+    $executor = $this->createUser(['execute external tools']);
+    $this->setCurrentUser($actor);
+    $invocation = $this->container->get('tool_external.delegated_runner')->run(
       'external:prepare',
       ['title' => 'Campaign'],
-      ['tool_external_context' => ['actor' => $actor, 'caller' => 'content.prepare.v1']],
+      'content.prepare.v1',
+      $executor,
     );
     $this->assertTrue($invocation->getResult()->isSuccess(), (string) $invocation->getResult()->getMessage());
     $this->assertSame($this->validOutputs(), $invocation->getResult()->getContextValues());
@@ -96,7 +98,8 @@ final class ExternalToolExecutionTest extends KernelTestBase {
     $this->assertSame(['title' => 'Campaign'], $wire['inputs']);
     $this->assertSame((string) $actor->id(), $wire['context']['actor']['id']);
     $this->assertSame($actor->getRoles(), $wire['context']['actor']['roles']);
-    $this->assertSame($executor, $wire['context']['executor']['id']);
+    $this->assertSame((string) $executor->id(), $wire['context']['executor']['id']);
+    $this->assertSame((string) $actor->id(), (string) $this->container->get('current_user')->id());
     $this->assertSame('content.prepare.v1', $wire['context']['caller']);
     $this->assertSame('Bearer test-only', $this->requests[0]->getHeaderLine('Authorization'));
   }
@@ -115,16 +118,41 @@ final class ExternalToolExecutionTest extends KernelTestBase {
   }
 
   /**
-   * Supplying custom provenance requires a Drupal account object.
+   * Legacy plugin configuration is rejected before making an HTTP request.
    */
   public function testInvalidContextFailsBeforeHttp(): void {
     $this->respondWith($this->validOutputs());
     $runner = $this->container->get('tool.runner');
-    foreach (['invalid', ['caller' => 'custom'], ['actor' => 'invalid']] as $context) {
+    foreach ([NULL, ['caller' => 'custom'], ['actor' => $this->createUser()]] as $context) {
       $result = $runner->run('external:prepare', ['title' => 'Campaign'], ['tool_external_context' => $context])->getResult();
       $this->assertFalse($result->isSuccess());
     }
     $this->assertCount(0, $this->requests);
+  }
+
+  /**
+   * The executor still needs the tool's permission.
+   */
+  public function testDelegationRequiresExecutorAccess(): void {
+    $actor = (string) $this->container->get('current_user')->id();
+    $result = $this->container->get('tool_external.delegated_runner')
+      ->run('external:prepare', ['title' => 'Campaign'], 'content.prepare.v1', $this->createUser())
+      ->getResult();
+    $this->assertSame(FailureCategory::Access, $result->getFailureCategory());
+    $this->assertSame($actor, (string) $this->container->get('current_user')->id());
+    $this->assertCount(0, $this->requests);
+  }
+
+  /**
+   * A native invoker label cannot inherit another invocation's attribution.
+   */
+  public function testNativeInvokerWithMatchingLabel(): void {
+    $this->respondWith($this->validOutputs());
+    $result = $this->container->get('tool.runner')->run('external:prepare', ['title' => 'Campaign'], [], 'content.prepare.v1')->getResult();
+    $this->assertTrue($result->isSuccess());
+    $wire = json_decode((string) $this->requests[0]->getBody(), TRUE, flags: JSON_THROW_ON_ERROR);
+    $this->assertSame('tool_api', $wire['context']['caller']);
+    $this->assertSame($wire['context']['actor'], $wire['context']['executor']);
   }
 
   /**

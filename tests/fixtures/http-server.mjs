@@ -71,8 +71,10 @@ const server = createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' }).end('{broken');
     return;
   }
-  if (req.url === '/oversize') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+  if (['/oversize', '/oversize/html', '/oversize/gateway'].includes(req.url)) {
+    const status = req.url === '/oversize/gateway' ? 502 : 200;
+    const type = req.url === '/oversize' ? 'application/json' : 'text/html';
+    res.writeHead(status, { 'Content-Type': type });
     res.flushHeaders();
     res.end(' '.repeat(70000));
     return;

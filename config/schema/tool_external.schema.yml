@@ -1,3 +1,11 @@
+# The names and types of input values come from the site's tool registration.
+tool.plugin.external:*:
+  type: sequence
+  label: 'External tool inputs'
+  sequence:
+    type: ignore
+    label: 'Declared input value'
+
 tool_external.settings:
   type: config_object
   label: External tool connections
@@ -82,4 +90,3 @@ tool_external.data_definition:
         type: tool_external.data_definition
     item_definition:
       type: tool_external.data_definition
-

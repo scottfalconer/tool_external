@@ -11,6 +11,7 @@ use Drupal\tool_external\Entity\ExternalTool;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -121,8 +122,15 @@ final class ExternalHttpTest extends KernelTestBase {
    * Checks that transport failures withhold partial outputs.
    */
   #[DataProvider('failedEndpoints')]
-  public function testTransportFailuresReturnNoOutputs(string $path, string $reason): void {
+  public function testTransportFailuresReturnNoOutputs(string $path, string $reason, ?string $outcome = NULL, ?int $status = NULL): void {
     $this->connect($path);
+    if ($outcome !== NULL) {
+      $logger = $this->createMock(LoggerInterface::class);
+      $logger->expects($this->once())->method('log')->with($this->anything(), $this->stringContains('{status_code}'), $this->callback(
+        static fn (array $context): bool => $context['outcome'] === $outcome && $context['status_code'] === $status,
+      ));
+      $this->container->get('logger.channel.tool_external')->addLogger($logger);
+    }
     $started = microtime(TRUE);
     $inputs = ['title' => 'Spring', 'campaign_code' => 'CAM-123'];
     $result = $this->container->get('tool.runner')->run('external:campaign_prepare', $inputs)->getResult();
@@ -142,7 +150,9 @@ final class ExternalHttpTest extends KernelTestBase {
     return [
       ['/invalid', 'invalid JSON'],
       ['/early-hints/text', 'did not return JSON'],
-      ['/oversize', 'response exceeds'],
+      ['/oversize', 'response exceeds', 'response_size', 200],
+      ['/oversize/html', 'did not return JSON', 'content_type', 200],
+      ['/oversize/gateway', 'unsuccessful HTTP status', 'http_status', 502],
       ['/redirect', 'unsuccessful HTTP status'],
       ['/slow', 'deadline'],
       ['/slow_headers', 'deadline'],

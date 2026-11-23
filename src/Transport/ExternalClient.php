@@ -6,10 +6,11 @@ namespace Drupal\tool_external\Transport;
 
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Component\Uuid\UuidInterface;
-use Drupal\Core\Session\AccountInterface;
+use Drupal\tool\Tool\Invoker;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\tool_external\Config\StableConfigReader;
 use Drupal\tool_external\Definition\DefinitionFactory;
+use Drupal\tool_external\DelegatedToolRunner;
 use Drupal\tool_external\Exception\ExternalToolException;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\ConnectException;
@@ -33,45 +34,56 @@ final class ExternalClient {
     private readonly AccountProxyInterface $currentUser,
     private readonly LoggerInterface $logger,
     private readonly ?TimeInterface $time = NULL,
+    private readonly ?DelegatedToolRunner $delegation = NULL,
   ) {}
+
+  /**
+   * Checks execution prerequisites without contacting the endpoint.
+   */
+  public function checkRequirements(string $id): void {
+    $this->loadConfiguration($id);
+  }
+
+  /**
+   * Reads the active registration and resolves its authorized connection.
+   */
+  private function loadConfiguration(string $id): array {
+    $tool = $this->config->read('tool_external.tool.' . $id);
+    if (($tool['status'] ?? FALSE) !== TRUE) {
+      throw new ExternalToolException('disabled', 'This external tool is not enabled.');
+    }
+    return [$tool, $this->connections->resolve((string) ($tool['connection'] ?? ''), 'external:' . $id)];
+  }
 
   /**
    * Invokes a locally declared tool and returns its checked output values.
    *
-   * An optional caller context carries an in-process initiating account and
-   * caller label. Plain invocations use the current account for both roles.
+   * Plain calls use the current account for both actor and executor.
    */
-  public function invoke(string $id, array $inputs, array $caller_context = []): array {
+  public function invoke(string $id, array $inputs, ?Invoker $invoker = NULL): array {
     $invocation_id = $this->uuid->generate();
     $started = $this->now();
     $outcome = 'success';
     $deadline = NULL;
     $sink = NULL;
+    $response = NULL;
     try {
-      $tool = $this->config->read('tool_external.tool.' . $id);
-      if (($tool['status'] ?? FALSE) !== TRUE) {
-        throw new ExternalToolException('disabled', 'This external tool is not enabled.');
-      }
-      $connection = $this->connections->resolve((string) ($tool['connection'] ?? ''), 'external:' . $id);
+      [$tool, $connection] = $this->loadConfiguration($id);
       $deadline = $started + $connection['timeout'];
       $executor = [
         'id' => (string) $this->currentUser->id(),
         'roles' => array_values($this->currentUser->getRoles()),
       ];
-      $actor = $caller_context === [] ? $this->currentUser : ($caller_context['actor'] ?? NULL);
-      $caller = $caller_context['caller'] ?? 'tool_api';
-      if (!$actor instanceof AccountInterface || !is_string($caller)) {
-        throw new ExternalToolException('context', 'The Drupal invocation context is invalid.');
-      }
+      $context = $this->delegation?->contextFor('external:' . $id, $invoker);
       $request = [
         'protocol' => self::PROTOCOL,
         'tool' => ['id' => 'external:' . $id, 'version' => (int) ($tool['contract_version'] ?? 0)],
         'invocation_id' => $invocation_id,
         'context' => [
           'site_id' => (string) ($this->config->read('system.site')['uuid'] ?? ''),
-          'actor' => ['id' => (string) $actor->id(), 'roles' => array_values($actor->getRoles())],
+          'actor' => $context['actor'] ?? $executor,
           'executor' => $executor,
-          'caller' => $caller,
+          'caller' => $context['caller'] ?? 'tool_api',
         ],
         'inputs' => JsonValues::inputs($inputs, $this->definitions->inputs($tool['inputs'] ?? [])),
       ];
@@ -93,7 +105,7 @@ final class ExternalClient {
       }
       $network_timeout = $timeout_ms / 1000;
       $sink = new BoundedResponseStream($connection['max_response_bytes']);
-      $response = $this->httpClient->request('POST', $connection['url'], [
+      $options = [
         'headers' => [
           'Accept' => 'application/json',
           'Accept-Encoding' => 'identity',
@@ -112,12 +124,26 @@ final class ExternalClient {
         'decode_content' => FALSE,
         'stream' => FALSE,
         'sink' => $sink,
-      ]);
+      ];
+      try {
+        $response = $this->httpClient->request('POST', $connection['url'], $options);
+      }
+      catch (RequestException $exception) {
+        if (!$sink->overflowed()) {
+          throw $exception;
+        }
+        // A short write aborts the body download. The received response still
+        // tells us whether the origin returned an HTTP error or invalid MIME.
+        $response = $exception->getResponse();
+        if ($response === NULL) {
+          throw new ExternalToolException('response_size', 'The external tool response exceeds the platform limit.');
+        }
+      }
       $stream = $response->getBody();
       try {
         // cURL can receive proxy CONNECT or 1xx headers before the endpoint
         // replies. The bounded sink limits writes throughout the transfer.
-        $this->checkResponse($response, $connection['max_response_bytes'], $deadline);
+        $this->checkResponse($response, $connection['max_response_bytes'], $deadline, $sink->overflowed());
         if ($stream->isSeekable()) {
           $stream->rewind();
         }
@@ -196,10 +222,11 @@ final class ExternalClient {
       if ($sink !== NULL) {
         $sink->close();
       }
-      $this->logger->notice('External tool {tool}, invocation {invocation}, outcome {outcome}, duration {duration} ms.', [
+      $this->logger->notice('External tool {tool}, invocation {invocation}, outcome {outcome}, HTTP {status_code}, duration {duration} ms.', [
         'tool' => 'external:' . $id,
         'invocation' => $invocation_id,
         'outcome' => $outcome,
+        'status_code' => $response?->getStatusCode() ?? 'unavailable',
         'duration' => (int) round(($this->now() - $started) * 1000),
       ]);
     }
@@ -208,7 +235,7 @@ final class ExternalClient {
   /**
    * Checks the final HTTP response before decoding the tool result.
    */
-  private function checkResponse(ResponseInterface $response, int $maximum_bytes, float $deadline): void {
+  private function checkResponse(ResponseInterface $response, int $maximum_bytes, float $deadline, bool $overflowed): void {
     if ($this->now() >= $deadline) {
       throw new ExternalToolException('timeout', 'The external tool exceeded its deadline.');
     }
@@ -224,7 +251,7 @@ final class ExternalClient {
       throw new ExternalToolException('content_encoding', 'The external tool endpoint must return uncompressed JSON.');
     }
     $length = $response->getHeaderLine('Content-Length');
-    if ($length !== '' && (!ctype_digit($length) || (float) $length > $maximum_bytes)) {
+    if ($overflowed || ($length !== '' && (!ctype_digit($length) || (float) $length > $maximum_bytes))) {
       throw new ExternalToolException('response_size', 'The external tool response exceeds the platform limit.');
     }
   }

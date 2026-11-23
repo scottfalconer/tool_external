@@ -1,8 +1,19 @@
 // A Fetch handler for the normalize_title declaration in the module README.
+// Web Crypto verifies the HMAC in native code, including its tag comparison.
+async function hasBearerToken(request, token) {
+  const header = request.headers.get('Authorization');
+  if (!header || typeof token !== 'string' || !token) return false;
+  const encode = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', encode.encode(token),
+    {name: 'HMAC', hash: 'SHA-256'}, false, ['sign', 'verify']);
+  const expected = await crypto.subtle.sign('HMAC', key, encode.encode(`Bearer ${token}`));
+  return crypto.subtle.verify('HMAC', key, expected, encode.encode(header));
+}
+
 export default {
   async fetch(request, env) {
     if (request.method !== 'POST') return new Response(null, {status: 405, headers: {Allow: 'POST'}});
-    if (!env.FORMATTER_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.FORMATTER_TOKEN}`) {
+    if (!await hasBearerToken(request, env.FORMATTER_TOKEN)) {
       return new Response(null, {status: 401});
     }
     const call = await request.json().catch(() => null);

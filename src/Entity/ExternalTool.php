@@ -127,6 +127,10 @@ final class ExternalTool extends ConfigEntityBase {
     if (str_contains($data['permission'], ',') && str_contains($data['permission'], '+')) {
       throw new \InvalidArgumentException('The external tool permission cannot mix comma and plus operators.');
     }
+    $separator = str_contains($data['permission'], ',') ? ',' : '+';
+    if (in_array('', array_map('trim', explode($separator, $data['permission'])), TRUE)) {
+      throw new \InvalidArgumentException('Each permission in the external tool expression must be nonempty.');
+    }
     if (!is_int($data['contract_version'] ?? NULL) || $data['contract_version'] < 1) {
       throw new \InvalidArgumentException('The external tool contract_version must be a positive integer.');
     }

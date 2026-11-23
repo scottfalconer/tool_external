@@ -7,6 +7,7 @@ namespace Drupal\tool_external\Plugin\tool\Tool;
 use Drupal\Component\Plugin\DependentPluginInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\tool\Attribute\Tool;
+use Drupal\tool\Exception\RequirementsException;
 use Drupal\tool\ExecutableResult;
 use Drupal\tool\FailureCategory;
 use Drupal\tool\Tool\ToolBase;
@@ -45,7 +46,23 @@ final class ExternalTool extends ToolBase implements DependentPluginInterface {
   /**
    * {@inheritdoc}
    */
+  public function checkRequirements(): void {
+    try {
+      $this->client->checkRequirements((string) $this->getDerivativeId());
+    }
+    catch (ExternalToolException $exception) {
+      throw new RequirementsException($exception->getMessage(), previous: $exception);
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
+    // Drop obsolete provenance values before PluginBase stores configuration.
+    if (array_key_exists('tool_external_context', $configuration)) {
+      $configuration['tool_external_context'] = NULL;
+    }
     $instance = parent::create($container, $configuration, $plugin_id, $plugin_definition);
     $instance->client = $container->get('tool_external.client');
     return $instance;
@@ -60,11 +77,10 @@ final class ExternalTool extends ToolBase implements DependentPluginInterface {
       return ExecutableResult::failure(new TranslatableMarkup('An external tool definition is required.'), NULL, FailureCategory::Runtime);
     }
     try {
-      $context = $this->configuration['tool_external_context'] ?? [];
-      if (!is_array($context)) {
-        throw new ExternalToolException('context', 'The Drupal invocation context is invalid.');
+      if (array_key_exists('tool_external_context', $this->configuration)) {
+        throw new ExternalToolException('context', 'Use the delegated runner for custom invocation context.');
       }
-      $outputs = $this->client->invoke($id, $values, $context);
+      $outputs = $this->client->invoke($id, $values, $this->getInvoker());
       return ExecutableResult::success(new TranslatableMarkup('External tool completed.'), $outputs);
     }
     catch (ExternalToolException $exception) {

@@ -41,6 +41,8 @@ final class DefinitionCacheSubscriber implements EventSubscriberInterface {
     foreach ($names as $name) {
       if (str_starts_with($name, 'tool_external.tool.')) {
         $this->container->get('plugin.manager.tool')->clearCachedDefinitions();
+        // Action providers may derive their own plugins from the tool catalog.
+        $this->container->get('plugin.manager.action', ContainerInterface::NULL_ON_INVALID_REFERENCE)?->clearCachedDefinitions();
         return;
       }
     }

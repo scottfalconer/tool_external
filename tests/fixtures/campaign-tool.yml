@@ -35,4 +35,3 @@ outputs:
         code:
           data_type: string
           required: false
-

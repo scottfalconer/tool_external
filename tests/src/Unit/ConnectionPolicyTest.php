@@ -52,6 +52,7 @@ final class ConnectionPolicyTest extends UnitTestCase {
     $cases = [
       'disabled environment' => [['enabled' => FALSE], 'https://functions.example.test/invoke', 'disabled'],
       'unapproved host' => [[], 'https://other.example.test/invoke', 'destination'],
+      'malformed host entry' => [['allowed_hosts' => [123]], 'https://123/invoke', 'destination'],
       'plaintext public URL' => [[], 'http://functions.example.test/invoke', 'destination'],
       'missing credential' => [['secrets' => []], 'https://functions.example.test/invoke', 'credentials'],
       'another allowed host' => [
@@ -100,7 +101,7 @@ final class ConnectionPolicyTest extends UnitTestCase {
       $settings = new Settings([
         'tool_external' => [
           'enabled' => TRUE,
-          'allowed_hosts' => ['functions.example.test'],
+          'allowed_hosts' => ['Functions.EXAMPLE.Test'],
           'secrets' => ['example' => $credential],
         ],
       ]);

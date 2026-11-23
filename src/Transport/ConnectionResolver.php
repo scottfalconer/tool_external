@@ -43,7 +43,8 @@ final class ConnectionResolver {
     }
     $host = strtolower($parts['host']);
     $allowed = $platform['allowed_hosts'] ?? [];
-    if (!is_array($allowed) || !in_array($host, $allowed, TRUE)) {
+    $allowed_hosts = is_array($allowed) ? array_filter($allowed, 'is_string') : [];
+    if (!in_array($host, array_map('strtolower', $allowed_hosts), TRUE)) {
       throw new ExternalToolException('destination', 'The external tool host is not enabled by this platform.');
     }
     $local_http = ($platform['allow_local_http'] ?? FALSE) === TRUE

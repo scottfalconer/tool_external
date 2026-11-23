@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Drupal\Tests\tool_external\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\tool\Drush\RequirementStatus;
 use Drupal\tool\FailureCategory;
 use Drupal\tool\Tool\ToolDefinition;
 use Drupal\tool\TypedData\MapOutputDefinition;
 use Drupal\tool_external\Entity\ExternalTool;
+use GuzzleHttp\ClientInterface;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
@@ -49,6 +51,37 @@ final class ExternalToolDiscoveryTest extends KernelTestBase {
     $this->assertSame($tool->uuid(), $stored['uuid']);
     $this->assertSame('missing_connection', $stored['connection']);
     $this->assertArrayNotHasKey('credential', $stored);
+
+    $typed = $this->container->get('config.typed');
+    $key = 'tool.plugin.external:campaign';
+    $this->assertTrue($typed->hasConfigSchema($key));
+    $inputs = ['title' => 'Campaign title'];
+    $this->assertSame($inputs, $typed->createFromNameAndData($key, $inputs)->getValue());
+  }
+
+  /**
+   * Reports readiness from local settings without connecting to the provider.
+   */
+  public function testRequirementsUseLocalConnectionPolicy(): void {
+    $http = $this->createMock(ClientInterface::class);
+    $http->expects($this->never())->method('request');
+    $this->container->set('http_client', $http);
+    $this->createTool();
+    $manager = $this->container->get('plugin.manager.tool');
+    $check = static fn () => RequirementStatus::forTool($manager, 'external:campaign');
+    $this->assertStringContainsString('disabled', $check()->label());
+    $platform = ['enabled' => TRUE, 'allowed_hosts' => ['formatter.example']];
+    $this->setSetting('tool_external', $platform);
+    $this->assertStringContainsString('connection is not configured', $check()->label());
+    $url = 'https://formatter.example/invoke';
+    $this->config('tool_external.settings')->set('connections.missing_connection', [
+      'url' => $url,
+      'secret' => 'formatter',
+    ])->save();
+    $this->assertStringContainsString('credential is not available', $check()->label());
+    $platform['secrets']['formatter'] = ['url' => $url, 'token' => 'fixture', 'allowed_tools' => ['external:campaign']];
+    $this->setSetting('tool_external', $platform);
+    $this->assertTrue($check()->met);
   }
 
   /**
@@ -59,7 +92,11 @@ final class ExternalToolDiscoveryTest extends KernelTestBase {
     $manager = $this->container->get('plugin.manager.tool');
     $this->assertSame('Campaign', (string) $manager->getDefinition('external:campaign')->getLabel());
 
+    $this->container->get('plugin.manager.action')->getDefinitions();
+    $cache = $this->container->get('cache.discovery');
+    $this->assertNotFalse($cache->get('action_info'));
     $tool->set('label', 'Updated campaign')->save();
+    $this->assertFalse($cache->get('action_info'));
     $this->assertSame('Updated campaign', (string) $manager->getDefinition('external:campaign')->getLabel());
     $tool->disable()->save();
     $this->assertFalse($manager->hasDefinition('external:campaign'));

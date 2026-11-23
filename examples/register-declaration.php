@@ -8,6 +8,11 @@
 use Drupal\tool\Tool\ToolOperation;
 use Drupal\tool_external\Entity\ExternalTool;
 
+/**
+ * Arguments supplied by Drush php:script.
+ *
+ * @var array<int, string> $extra
+ */
 if (count($extra) < 3 || count($extra) > 4) {
   throw new InvalidArgumentException('Supply a local JSON file, connection, Tool API operation and optional Drupal permission.');
 }

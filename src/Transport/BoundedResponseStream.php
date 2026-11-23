@@ -17,6 +17,11 @@ final class BoundedResponseStream extends Stream {
    */
   private int $receivedBytes = 0;
 
+  /**
+   * Whether a write was refused because it would exceed the byte limit.
+   */
+  private bool $overflowed = FALSE;
+
   public function __construct(private readonly int $maximumBytes) {
     $resource = fopen('php://temp/maxmemory:65536', 'w+');
     if ($resource === FALSE) {
@@ -29,12 +34,21 @@ final class BoundedResponseStream extends Stream {
    * Rejects overflow before bytes reach the memory or temporary-file buffer.
    */
   public function write($string): int {
-    if ($this->receivedBytes + strlen($string) > $this->maximumBytes) {
-      throw new ExternalToolException('response_size', 'The external tool response exceeds the platform limit.');
+    if ($this->overflowed || $this->receivedBytes + strlen($string) > $this->maximumBytes) {
+      // A short write stops cURL and preserves the response on its exception.
+      $this->overflowed = TRUE;
+      return 0;
     }
     $written = parent::write($string);
     $this->receivedBytes += $written;
     return $written;
+  }
+
+  /**
+   * Reports whether this response exceeded the configured buffer.
+   */
+  public function overflowed(): bool {
+    return $this->overflowed;
   }
 
 }

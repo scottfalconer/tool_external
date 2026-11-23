@@ -6,4 +6,3 @@ administer external tools:
   title: Administer external tools
   description: Change external tool definitions and their connections.
   restrict access: true
-
